@@ -1,26 +1,46 @@
 #include <stdio.h>
-
-#define INPUT_FILE_NAME "audio.txt"
+#include <string.h>
+//#define INPUT_FILE_NAME "audio.txt"
+#define INPUT_FILE_NAME "uart.txt"
 #define OUT_FILE_NAME "pcmdump"
 
 static char temp_buf[100];
 
 
-void main() {
+void main(int argc, char* argv[]) {
 	int readbytes;
 	int i;
 	short value = 0;
 	int sign = 0;
 	int get_one_int = 0;
-	FILE *handle = fopen(INPUT_FILE_NAME, "r");
+	char infile[20];
+	char outfile[20];
+
+	memset(infile, 0, 20);
+	memset(outfile, 0, 20);
+
+	if (argc < 3) {
+		printf("usage: ./test infile outfile\n");
+		memcpy(infile, INPUT_FILE_NAME, 9);
+		memcpy(outfile, OUT_FILE_NAME, 7);
+	} else {
+		/**/
+		printf("[argv1:%s] (%d), [argv2:%s] (%d)\n", argv[1], strlen(argv[1]), argv[2], strlen(argv[2]));
+		memcpy(infile, argv[1], strlen(argv[1]));
+		memcpy(outfile, argv[2], strlen(argv[2]));
+	}
+
+	printf("infile:%s, outfile:%s\n", infile, outfile);
+
+	FILE *handle = fopen(infile, "r");
 	if (handle == NULL) {
-        printf("Encountered error reading %s\n", INPUT_FILE_NAME);
+        printf("Encountered error reading %s\n", infile);
 		return;
 	}
 
-	FILE *handle_out = fopen(OUT_FILE_NAME, "wb");
+	FILE *handle_out = fopen(outfile, "wb");
 	if (handle_out == NULL) {
-        printf("Encountered error writing %s\n", OUT_FILE_NAME);
+        printf("Encountered error writing %s\n", outfile);
 		return;
 	}
 	
