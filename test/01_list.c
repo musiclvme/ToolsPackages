@@ -100,6 +100,8 @@ static int _snd_config_make(snd_config_t **config, char **id, snd_config_type_t 
 	if (type == SND_CONFIG_TYPE_COMPOUND)
 		INIT_LIST_HEAD(&n->u.compound.fields);
 	*config = n;
+
+	printf("%s: id=%s, n=%p\n", __FUNCTION__, n->id, n);
 	return 0;
 }
 
@@ -145,6 +147,7 @@ void main(void)
 		else
 			type = SND_CONFIG_TYPE_STRING;
 		id = test_array[i];
+		printf("%d:id=%s\n", i, id);
 		_snd_config_make_add(&config, &id, type, parent);
 		parent = config;
 
@@ -154,12 +157,20 @@ void main(void)
 	
 	/*print list info*/
 	list = &first->u.compound.fields;
-	config = list_entry(list, snd_config_t, list);
+	config = list_entry(list, snd_config_t, u);
 	printf("id=%s, type=%d\n", config->id, config->type);
 	
-	list_for_each(loop, list) {
-		config = list_entry(loop, snd_config_t, list);
-		printf("id=%s, type=%d\n", config->id, config->type);
+	while (config != NULL) {
+		config = NULL;
+		list_for_each(loop, list) {
+			config = list_entry(loop, snd_config_t, list);
+			printf("id=%s, type=%d, config=%p\n", config->id, config->type, config);
+		}
+		if (config != NULL)
+			list = &config->u.compound.fields;
+		else
+			break;
+
 	}
 	
 	printf("--------------Done-----------------\n");
