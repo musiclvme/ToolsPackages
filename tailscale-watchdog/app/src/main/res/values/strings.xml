@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TS看门狗</string>
+    <string name="accessibility_description">在检测到 Wi-Fi 或 Tailscale 异常时，自动打开系统 Wi-Fi 开关并切换 Tailscale。本服务只会在恢复流程中操作这两个界面，不会读取你的聊天或密码。</string>
+    <string name="notification_channel_name">网络监控</string>
+    <string name="notification_channel_desc">持续检测 Wi-Fi 和 Tailscale 连接</string>
+    <string name="notification_title">Tailscale 网络看门狗运行中</string>
+    <string name="action_recover_now">立即恢复</string>
+    <string name="action_stop">停止</string>
+</resources>
