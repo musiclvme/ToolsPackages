@@ -7,11 +7,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
+import zipfile
 
 from docx import Document
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
+from lxml import etree
 
 SRC = Path("/workspace/translate/Vendor_Survey_Laboratory_Cerba_Research_SOBC_V1.docx")
 DST = Path(
@@ -53,30 +55,41 @@ def is_placeholder(text: str) -> bool:
     return t in PLACEHOLDERS
 
 
-def make_sym_run(char: str = "00FE"):
-    r = OxmlElement("w:r")
-    rPr = OxmlElement("w:rPr")
-    rFonts = OxmlElement("w:rFonts")
-    rFonts.set(qn("w:ascii"), "Wingdings")
-    rFonts.set(qn("w:hAnsi"), "Wingdings")
-    rPr.append(rFonts)
-    sz = OxmlElement("w:sz")
-    sz.set(qn("w:val"), "22")
-    rPr.append(sz)
-    r.append(rPr)
-    sym = OxmlElement("w:sym")
-    sym.set(qn("w:font"), "Wingdings")
-    sym.set(qn("w:char"), char)
-    r.append(sym)
-    return r
+def set_checkbox_state(cb, checked: bool) -> None:
+    """Set Word FORMCHECKBOX current + default state (w:checked / w:default)."""
+    val = "1" if checked else "0"
+    el = cb.find(qn("w:checked"))
+    if el is None:
+        el = OxmlElement("w:checked")
+        cb.append(el)
+    el.set(qn("w:val"), val)
+    default = cb.find(qn("w:default"))
+    if default is not None:
+        default.set(qn("w:val"), val)
 
 
-def append_check(paragraph: Paragraph, char: str = "00FE") -> None:
-    paragraph._p.append(make_sym_run(char))
+def iter_checkbox_controls(container):
+    for fld in container.findall(".//" + qn("w:fldChar")):
+        if fld.get(qn("w:fldCharType")) != "begin":
+            continue
+        ff = fld.find(qn("w:ffData"))
+        if ff is None:
+            continue
+        cb = ff.find(qn("w:checkBox"))
+        if cb is None:
+            continue
+        yield cb
 
 
-def prepend_check(paragraph: Paragraph, char: str = "00FE") -> None:
-    paragraph._p.insert(0, make_sym_run(char))
+def set_form_checkboxes(cell, checked: bool) -> None:
+    for cb in iter_checkbox_controls(cell._tc):
+        set_checkbox_state(cb, checked)
+
+
+def set_para_form_checkbox(paragraph: Paragraph, checked: bool = True) -> None:
+    for cb in iter_checkbox_controls(paragraph._p):
+        set_checkbox_state(cb, checked)
+        return
 
 
 def clear_runs(paragraph: Paragraph) -> None:
@@ -129,23 +142,12 @@ def set_cell_text(cell, text: str, force: bool = False) -> bool:
 
 
 def mark_yna(row, choice: str) -> None:
-    """choice in yes/no/na. Adds a Wingdings tick to an empty Yes/No/N/A cell."""
+    """choice in yes/no/na. Checks the native Word FORMCHECKBOX in that column."""
     cells = unique_cells(row)
     if len(cells) < 5:
         return
-    idx = {"yes": 1, "no": 2, "na": 3}[choice]
-    cell = cells[idx]
-    # already has a check or meaningful text? skip (except stray whitespace)
-    if cell._tc.findall(".//" + qn("w:sym")):
-        return
-    txt = cell_text(cell).strip()
-    if txt and txt.lower() not in {"yes", "no", "n/a", "na"}:
-        # e.g. accidental "d" — do not overwrite
-        return
-    p = cell.paragraphs[0] if cell.paragraphs else None
-    if p is None:
-        return
-    append_check(p)
+    for name, idx in (("yes", 1), ("no", 2), ("na", 3)):
+        set_form_checkboxes(cells[idx], checked=(name == choice))
 
 
 def check_sdt_paragraphs(cell, para_indices: list[int]) -> None:
@@ -166,11 +168,7 @@ def add_check_to_para(cell, para_index: int) -> None:
     paras = cell.paragraphs
     if para_index >= len(paras):
         return
-    p = paras[para_index]
-    if p._p.findall(".//" + qn("w:sym")):
-        return
-    # put check at start of paragraph
-    p._p.insert(0, make_sym_run("00FE"))
+    set_para_form_checkbox(paras[para_index], True)
 
 
 def fill_comment(table, row_i: int, text: str, force: bool = False) -> bool:
@@ -180,19 +178,13 @@ def fill_comment(table, row_i: int, text: str, force: bool = False) -> bool:
 
 
 def mark_inline_yes(cell) -> None:
-    """Insert a tick before the first 'Yes' run in a Yes/No cell."""
-    if cell._tc.findall(".//" + qn("w:sym")):
+    """Check the first FORMCHECKBOX (Yes) and clear the second (No) in a Yes/No cell."""
+    boxes = list(iter_checkbox_controls(cell._tc))
+    if not boxes:
         return
-    for p in cell.paragraphs:
-        for child in list(p._p):
-            if child.tag == qn("w:r"):
-                texts = "".join(t.text or "" for t in child.findall(qn("w:t")))
-                if "Yes" in texts or texts.strip().startswith("Yes"):
-                    child.addprevious(make_sym_run("00FE"))
-                    return
-        if "Yes" in p.text:
-            prepend_check(p)
-            return
+    set_checkbox_state(boxes[0], True)
+    for cb in boxes[1:]:
+        set_checkbox_state(cb, False)
 
 
 # ---------------------------------------------------------------------------
@@ -765,7 +757,7 @@ T10_EXPERTISE = (
     "Technical groups include molecular, pathology, microbiology and clinical "
     "research (ODC-CX-33 Document Control Procedure)."
 )
-T10_SUB = "No. Subcontractors are not used for tests provided to Cerba Research. N/A."
+T10_SUB = "N/A. Subcontractors are not used for tests provided to Cerba Research."
 
 
 def fill(doc: Document) -> None:
@@ -955,7 +947,7 @@ def fill(doc: Document) -> None:
         (35, "no", T10_LIMS),
         (37, "yes", T10_COMP),  # Chinese note: should be Yes
         (38, "yes", T10_EXPERTISE),
-        (39, "no", T10_SUB),
+        (39, "na", T10_SUB),
     ]
     for ri, choice, text in items:
         mark_yna(t10.rows[ri], choice)
@@ -983,10 +975,29 @@ def fill(doc: Document) -> None:
             set_cell_text(cells[-1], "N/A")
 
 
+def save_preserving_template(doc: Document, src: Path, dst: Path) -> None:
+    """Write filled document.xml back into a copy of the original docx zip.
+
+    python-docx Document.save() rewrites the whole package and drops/breaks
+    headers, customXml, form fields and other Word parts, which LibreOffice
+    then mis-renders (e.g. as unrelated HTML-like content).
+    """
+    xml = etree.tostring(
+        doc.element, xml_declaration=True, encoding="UTF-8", standalone=True
+    )
+    with zipfile.ZipFile(src) as zin:
+        names = zin.namelist()
+        parts = {name: zin.read(name) for name in names}
+    parts["word/document.xml"] = xml
+    with zipfile.ZipFile(dst, "w", compression=zipfile.ZIP_DEFLATED) as zout:
+        for name in names:
+            zout.writestr(name, parts[name])
+
+
 def main() -> None:
     doc = Document(str(SRC))
     fill(doc)
-    doc.save(str(DST))
+    save_preserving_template(doc, SRC, DST)
     print("saved", DST)
 
 
