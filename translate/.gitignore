@@ -1,0 +1,14 @@
+# Working extracts from document conversion; not part of the deliverable.
+*.json
+compare.txt
+unique_dump.txt
+filled_preview.*
+__pycache__/
+inspect_*.py
+dump_*.py
+extract_docs.py
+compare_docs.py
+print_full.py
+spotcheck.py
+verify_fill.py
+output/
