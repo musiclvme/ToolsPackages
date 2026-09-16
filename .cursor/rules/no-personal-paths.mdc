@@ -1,0 +1,25 @@
+---
+description: Do not write personal machine paths, usernames, or home directories into the repo
+alwaysApply: true
+---
+
+# No personal paths or identity in the repo
+
+The user may paste a local absolute path in chat so you can find a file. Treat that as **private working context only**.
+
+Never copy it into README, comments, tests, commit messages, PR titles/bodies, screenshots, or other committed files.
+
+## Do not write
+
+- Windows home paths: `C:\Users\<name>\...` or `C:/Users/<name>/...`
+- macOS home paths: `/Users/<name>/...`
+- Real usernames, emails, phone numbers, or machine hostnames
+- Other secrets: tokens, passwords, API keys, cookies
+
+## Write instead
+
+- Generic examples: `input.pdf`, `document.pdf`, `selected.pdf`
+- Placeholders: `C:\Users\<you>\Documents\file.pdf`, `~/Documents/file.pdf`
+- Repo-relative paths that already exist in this project
+
+If a prompt contains a personal path, use it to locate or copy the file if needed, then document the public/generic name only.

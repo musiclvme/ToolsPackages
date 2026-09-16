@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PDF 页面导出器</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <h1>PDF 页面导出器</h1>
+      <p>打开 PDF，勾选页面，导出成一份新文档</p>
+    </div>
+    <div class="file-meta" id="fileMeta" hidden></div>
+  </header>
+
+  <main>
+    <section class="dropzone" id="dropzone">
+      <input id="fileInput" type="file" accept="application/pdf,.pdf" />
+      <div class="dropzone-copy">
+        <strong>拖入 PDF，或点击选择文件</strong>
+        <span>支持按页码、页范围、书签选择页面后导出</span>
+      </div>
+    </section>
+
+    <section class="workspace" id="workspace" hidden>
+      <aside class="sidebar">
+        <label class="field">
+          <span>页码</span>
+          <input id="pageSpec" type="text" placeholder="例如 1-5,8,10 或 odd" />
+        </label>
+        <label class="field">
+          <span>密码（加密 PDF）</span>
+          <input id="password" type="password" autocomplete="off" />
+        </label>
+        <div class="button-row">
+          <button type="button" id="applySpec">应用页码</button>
+          <button type="button" class="ghost" id="selectAll">全选</button>
+          <button type="button" class="ghost" id="clearAll">清空</button>
+        </div>
+        <p class="hint">页码从 1 开始。可用 <code>1-5,8</code>、<code>10-</code>、<code>odd</code>、<code>even</code>。</p>
+        <div class="bookmarks" id="bookmarks" hidden>
+          <h2>书签</h2>
+          <ul id="bookmarkList"></ul>
+        </div>
+      </aside>
+
+      <div class="pages-wrap">
+        <div class="pages-toolbar">
+          <span id="selectionSummary">未选择页面</span>
+          <button type="button" class="primary" id="exportBtn" disabled>导出选中页面</button>
+        </div>
+        <div class="pages" id="pages"></div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
