@@ -107,3 +107,7 @@ def test_app_export_endpoint(tmp_path: Path):
     assert exported.status_code == 200
     reader = PdfReader(BytesIO(exported.data))
     assert len(reader.pages) == 2
+
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.get_json()["ok"] is True

@@ -28,6 +28,10 @@ def create_app() -> Flask:
     def index():
         return render_template("index.html")
 
+    @app.get("/health")
+    def health():
+        return jsonify({"ok": True})
+
     @app.post("/api/info")
     def api_info():
         upload = _require_pdf()

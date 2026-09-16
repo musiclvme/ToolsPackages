@@ -168,6 +168,7 @@ async function openFile(file) {
   }
   state.file = file;
   workspace.hidden = false;
+  dropzone.classList.add("has-file");
   try {
     await renderPdf(file);
     await loadInfo(file);
