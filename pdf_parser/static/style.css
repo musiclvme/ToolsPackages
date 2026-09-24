@@ -1,0 +1,271 @@
+:root {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --ink: #1c2430;
+  --muted: #5d6b7c;
+  --line: #d7dee8;
+  --accent: #0b6bcb;
+  --accent-ink: #ffffff;
+  --ok: #0f7b4a;
+  --danger: #b42318;
+  --shadow: 0 10px 30px rgba(18, 32, 51, 0.08);
+  font-family: "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+[hidden] {
+  display: none !important;
+}
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 24px;
+  padding: 28px 32px 16px;
+}
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+  letter-spacing: 0.02em;
+}
+
+.topbar p,
+.hint,
+.file-meta {
+  margin: 0;
+  color: var(--muted);
+}
+
+main {
+  padding: 0 32px 40px;
+}
+
+.dropzone {
+  position: relative;
+  border: 1.5px dashed #9aa8b8;
+  background: var(--panel);
+  border-radius: 16px;
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.dropzone.dragover {
+  border-color: var(--accent);
+  background: #eef6ff;
+}
+
+.dropzone.has-file {
+  min-height: 88px;
+}
+
+.dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dropzone-copy strong {
+  display: block;
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.workspace {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+}
+
+.sidebar,
+.pages-wrap {
+  background: var(--panel);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.sidebar {
+  padding: 18px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+input[type="text"],
+input[type="password"] {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--ink);
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: #e8eef6;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+}
+
+button.ghost {
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+button.primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.hint code {
+  background: #eef2f7;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.bookmarks {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.bookmarks h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.bookmarks ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 48vh;
+  overflow: auto;
+}
+
+.bookmarks button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  padding: 6px 4px;
+}
+
+.pages-wrap {
+  overflow: hidden;
+}
+
+.pages-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 14px;
+  padding: 18px;
+}
+
+.page-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fafbfd;
+  cursor: pointer;
+  position: relative;
+}
+
+.page-card.selected {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.page-card canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: white;
+}
+
+.page-card .label {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.page-card .check {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: white;
+}
+
+.page-card.selected .check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  background: #1c2430;
+  color: white;
+  padding: 12px 16px;
+  border-radius: 10px;
+  max-width: 360px;
+}
+
+.file-meta strong {
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+  .topbar, main {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
