@@ -1,0 +1,26 @@
+# Working extracts from document conversion; not part of the deliverable.
+zh_extract.json
+en_extract.json
+zh_en_map.json
+compare.txt
+unique_dump.txt
+zh_strings.txt
+zh_wt.txt
+zh_paras.txt
+zh_paras_xml.txt
+leftover_cjk.txt
+filled_preview.*
+__pycache__/
+inspect_*.py
+dump_*.py
+extract_docs.py
+extract_zh_strings.py
+extract_wt.py
+extract_paras.py
+extract_paras_xml.py
+compare_docs.py
+print_full.py
+spotcheck.py
+verify_fill.py
+build_map.py
+output/
