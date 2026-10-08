@@ -212,6 +212,21 @@
                         android:layout_marginTop="4dp"
                         android:text="开机后自动打开无线调试" />
 
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:hint="ADB TCP 端口（默认 5555）"
+                        style="@style/Widget.Material3.TextInputLayout.OutlinedBox">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/inputAdbPort"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number"
+                            android:text="5555" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switchRequireVpn"
                         android:layout_width="match_parent"

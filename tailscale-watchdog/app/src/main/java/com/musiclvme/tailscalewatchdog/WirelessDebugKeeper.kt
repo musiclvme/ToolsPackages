@@ -7,14 +7,15 @@ import java.util.concurrent.TimeUnit
 
 data class WirelessDebugSnapshot(
     val wifiToggleOn: Boolean,
-    val tcp5555Ready: Boolean,
+    val tcpReady: Boolean,
+    val desiredPort: Int,
     val persistPort: String,
     val livePort: String,
     val canWriteSecureSettings: Boolean,
     val rooted: Boolean,
     val detail: String,
 ) {
-    val enabled: Boolean get() = tcp5555Ready
+    val enabled: Boolean get() = tcpReady
 }
 
 enum class WirelessDebugAction {
@@ -25,33 +26,38 @@ enum class WirelessDebugAction {
 }
 
 /**
- * After reboot Android clears service.adb.tcp.port, so 5555 dies.
+ * After reboot Android clears service.adb.tcp.port, so the chosen TCP port dies.
  * persist.adb.tcp.port survives reboot, but only root or `adb shell setprop` can write it.
- * adb_wifi_enabled only turns on TLS wireless debugging, not port 5555.
+ * adb_wifi_enabled only turns on TLS wireless debugging, not this TCP port.
  */
 class WirelessDebugKeeper(context: Context) {
     private val app = context.applicationContext
-    private var lastLoggedAction: WirelessDebugAction? = null
+    private var lastLoggedKey: String? = null
     @Volatile private var rootedCache: Boolean? = null
 
+    private fun desiredPort(): Int = AppPrefs.adbTcpPort
+    private fun desiredPortText(): String = desiredPort().toString()
+
     fun snapshot(): WirelessDebugSnapshot {
+        val port = desiredPort()
         val wifiOn = readGlobal(KEY_ADB_WIFI) == 1
         val persist = persistPort()
         val live = livePort()
-        val ready = isTcp5555Ready()
+        val ready = isTcpReady()
         val canWrite = hasWriteSecureSettings()
         val rooted = canSu()
         val persistText = persist.ifBlank { "空" }
         val liveText = live.ifBlank { "空" }
         val detail = buildString {
             append(if (wifiOn) "无线调试开关：开" else "无线调试开关：关")
-            append("；TCP 5555：")
+            append("；TCP $port：")
             append(if (ready) "已监听" else "未监听")
             append("（persist=$persistText, live=$liveText）")
         }
         return WirelessDebugSnapshot(
             wifiToggleOn = wifiOn,
-            tcp5555Ready = ready,
+            tcpReady = ready,
+            desiredPort = port,
             persistPort = persist,
             livePort = live,
             canWriteSecureSettings = canWrite,
@@ -61,62 +67,65 @@ class WirelessDebugKeeper(context: Context) {
     }
 
     fun ensureEnabled(): WirelessDebugAction {
+        val port = desiredPort()
+        val portText = desiredPortText()
         writeGlobal(KEY_DEVELOPMENT, 1)
         writeGlobal(Settings.Global.ADB_ENABLED, 1)
         writeGlobal(KEY_ADB_WIFI, 1)
 
-        if (isTcp5555Ready()) {
-            remember(WirelessDebugAction.ALREADY_ON, "ADB TCP 5555 已在监听")
+        if (isTcpReady()) {
+            remember(WirelessDebugAction.ALREADY_ON, "ADB TCP $port 已在监听")
             return WirelessDebugAction.ALREADY_ON
         }
 
-        if (enableTcp5555()) {
-            remember(WirelessDebugAction.TURNED_ON, "已把 ADB TCP 端口固定为 5555")
+        if (enableTcpPort()) {
+            remember(WirelessDebugAction.TURNED_ON, "已把 ADB TCP 端口固定为 $port")
             return WirelessDebugAction.TURNED_ON
         }
 
         val persist = persistPort()
         val action = when {
-            persist == TCP_PORT -> WirelessDebugAction.FAILED
+            persist == portText -> WirelessDebugAction.FAILED
             canSu() || hasWriteSecureSettings() -> WirelessDebugAction.FAILED
             else -> WirelessDebugAction.NEED_PERMISSION
         }
-        val message = if (persist == TCP_PORT) {
-            "persist.adb.tcp.port 已是 5555，但当前进程还没听这个端口，等 adbd 重启或再开一次无线调试"
+        val message = if (persist == portText) {
+            "persist.adb.tcp.port 已是 $port，但当前进程还没听这个端口，等 adbd 重启或再开一次无线调试"
         } else {
-            "重启后 5555 会丢。请用 USB 执行一次：adb shell setprop persist.adb.tcp.port 5555"
+            "重启后 $port 会丢。请用 USB 执行一次：${persistCommand(port)}"
         }
         remember(action, message)
         return action
     }
 
-    fun isTcp5555Ready(): Boolean = livePort().toIntOrNull() == TCP_PORT_NUM
+    fun isTcpReady(): Boolean = livePort().toIntOrNull() == desiredPort()
 
     fun hasWriteSecureSettings(): Boolean {
         return app.checkSelfPermission(WRITE_SECURE) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun enableTcp5555(): Boolean {
+    private fun enableTcpPort(): Boolean {
+        val portText = desiredPortText()
         if (canSu()) {
             runSu("settings put global $KEY_DEVELOPMENT 1")
             runSu("settings put global ${Settings.Global.ADB_ENABLED} 1")
             runSu("settings put global $KEY_ADB_WIFI 1")
             for (key in PERSIST_KEYS) {
-                runSu("setprop $key $TCP_PORT")
-                runSu("resetprop $key $TCP_PORT")
+                runSu("setprop $key $portText")
+                runSu("resetprop $key $portText")
             }
-            runSu("setprop service.adb.tcp.port $TCP_PORT")
+            runSu("setprop service.adb.tcp.port $portText")
             runSu("setprop ctl.restart adbd")
             runSu("stop adbd; start adbd")
             Thread.sleep(1_500)
-            if (isTcp5555Ready() || persistPort() == TCP_PORT) return persistPort() == TCP_PORT
+            if (isTcpReady() || persistPort() == portText) return persistPort() == portText
         }
         for (key in PERSIST_KEYS) {
-            runPlain(listOf("setprop", key, TCP_PORT))
+            runPlain(listOf("setprop", key, portText))
         }
-        runPlain(listOf("setprop", "service.adb.tcp.port", TCP_PORT))
+        runPlain(listOf("setprop", "service.adb.tcp.port", portText))
         Thread.sleep(400)
-        return isTcp5555Ready() || persistPort() == TCP_PORT
+        return isTcpReady() || persistPort() == portText
     }
 
     private fun persistPort(): String {
@@ -204,9 +213,10 @@ class WirelessDebugKeeper(context: Context) {
     }
 
     private fun remember(action: WirelessDebugAction, message: String) {
-        if (action != lastLoggedAction) {
+        val key = "$action:${desiredPort()}"
+        if (key != lastLoggedKey) {
             EventLog.add(message)
-            lastLoggedAction = action
+            lastLoggedKey = key
         }
     }
 
@@ -215,15 +225,15 @@ class WirelessDebugKeeper(context: Context) {
         const val WRITE_SECURE = "android.permission.WRITE_SECURE_SETTINGS"
         const val KEY_ADB_WIFI = "adb_wifi_enabled"
         const val KEY_DEVELOPMENT = "development_settings_enabled"
-        const val TCP_PORT = "5555"
-        const val TCP_PORT_NUM = 5555
         val PERSIST_KEYS = listOf(
             "persist.adb.tcp.port",
             "persist.sys.adb.tcp.port",
         )
         const val GRANT_COMMAND =
             "adb shell pm grant $PACKAGE $WRITE_SECURE"
-        const val PERSIST_COMMAND =
-            "adb shell setprop persist.adb.tcp.port 5555"
+
+        fun persistCommand(port: Int = AppPrefs.adbTcpPort): String {
+            return "adb shell setprop persist.adb.tcp.port $port"
+        }
     }
 }

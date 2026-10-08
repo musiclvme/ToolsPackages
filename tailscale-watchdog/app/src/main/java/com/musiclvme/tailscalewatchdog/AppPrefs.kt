@@ -15,6 +15,7 @@ object AppPrefs {
     private const val KEY_LAST_RECOVERY = "last_recovery_ms"
     private const val KEY_LAST_PREVENTIVE = "last_preventive_ms"
     private const val KEY_KEEP_WIRELESS_DEBUG = "keep_wireless_debug"
+    private const val KEY_ADB_TCP_PORT = "adb_tcp_port"
 
     private lateinit var prefs: SharedPreferences
 
@@ -62,6 +63,10 @@ object AppPrefs {
         get() = prefs.getBoolean(KEY_KEEP_WIRELESS_DEBUG, true)
         set(value) { prefs.edit().putBoolean(KEY_KEEP_WIRELESS_DEBUG, value).apply() }
 
+    var adbTcpPort: Int
+        get() = prefs.getInt(KEY_ADB_TCP_PORT, DEFAULT_ADB_TCP_PORT).coerceIn(1024, 65535)
+        set(value) { prefs.edit().putInt(KEY_ADB_TCP_PORT, value.coerceIn(1024, 65535)).apply() }
+
     fun toSettings(): WatchdogSettings = WatchdogSettings(
         requireVpn = requireVpn,
         failureThreshold = failureThreshold,
@@ -69,4 +74,6 @@ object AppPrefs {
         preventiveIntervalMs = if (preventiveMin <= 0) 0L else preventiveMin * 60_000L,
         canary = canary,
     )
+
+    const val DEFAULT_ADB_TCP_PORT = 5555
 }

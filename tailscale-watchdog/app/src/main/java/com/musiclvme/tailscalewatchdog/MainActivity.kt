@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         binding.inputCooldown.setText(AppPrefs.cooldownSec.toString())
         binding.inputCanary.setText(AppPrefs.canary)
         binding.inputPreventive.setText(AppPrefs.preventiveMin.toString())
+        binding.inputAdbPort.setText(AppPrefs.adbTcpPort.toString())
     }
 
     private fun saveInputs() {
@@ -94,6 +95,8 @@ class MainActivity : AppCompatActivity() {
         AppPrefs.cooldownSec = binding.inputCooldown.text?.toString()?.toIntOrNull() ?: 180
         AppPrefs.canary = binding.inputCanary.text?.toString().orEmpty()
         AppPrefs.preventiveMin = binding.inputPreventive.text?.toString()?.toIntOrNull() ?: 0
+        AppPrefs.adbTcpPort = binding.inputAdbPort.text?.toString()?.toIntOrNull()
+            ?: AppPrefs.DEFAULT_ADB_TCP_PORT
         bindPrefsToInputs()
         Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show()
     }
@@ -164,24 +167,25 @@ class MainActivity : AppCompatActivity() {
         binding.setupTailscale.setTextColor(color(if (tsOk) R.color.ok else R.color.bad))
 
         val wireless = WirelessDebugKeeper(this).snapshot()
+        val port = wireless.desiredPort
         binding.setupWirelessDebug.text = when {
-            wireless.tcp5555Ready -> "ADB 5555：已监听"
-            wireless.persistPort == WirelessDebugKeeper.TCP_PORT -> "ADB 5555：已写入 persist，等 adbd 生效"
-            wireless.canWriteSecureSettings || wireless.rooted -> "ADB 5555：未监听，开机后会尝试拉起"
-            else -> "ADB 5555：未监听，需要 USB 执行 setprop persist"
+            wireless.tcpReady -> "ADB $port：已监听"
+            wireless.persistPort == port.toString() -> "ADB $port：已写入 persist，等 adbd 生效"
+            wireless.canWriteSecureSettings || wireless.rooted -> "ADB $port：未监听，开机后会尝试拉起"
+            else -> "ADB $port：未监听，需要 USB 执行 setprop persist"
         }
         binding.setupWirelessDebug.setTextColor(
             color(
                 when {
-                    wireless.tcp5555Ready -> R.color.ok
+                    wireless.tcpReady -> R.color.ok
                     wireless.canWriteSecureSettings || wireless.rooted ||
-                        wireless.persistPort == WirelessDebugKeeper.TCP_PORT -> R.color.warn
+                        wireless.persistPort == port.toString() -> R.color.warn
                     else -> R.color.bad
                 },
             ),
         )
         binding.setupWirelessGrant.text = WirelessDebugKeeper.GRANT_COMMAND
-        binding.setupWirelessPersist.text = WirelessDebugKeeper.PERSIST_COMMAND
+        binding.setupWirelessPersist.text = WirelessDebugKeeper.persistCommand(port)
         StatusStore.update {
             it.copy(
                 accessibilityOn = a11yOk,
