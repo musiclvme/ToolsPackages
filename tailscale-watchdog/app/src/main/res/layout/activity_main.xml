@@ -158,6 +158,17 @@
                         android:textSize="12sp"
                         android:textColor="@color/muted" />
 
+                    <TextView
+                        android:id="@+id/setupWirelessPersist"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="monospace"
+                        android:text="adb shell setprop persist.adb.tcp.port 5555"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp"
+                        android:textColor="@color/muted" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnOpenA11y"
                         style="@style/Widget.Material3.Button.TonalButton"

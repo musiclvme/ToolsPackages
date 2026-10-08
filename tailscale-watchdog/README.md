@@ -48,6 +48,15 @@ adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECU
 
 已 root 的手机也可以不授予上述权限，应用会改用 root 打开开关，并把 `5555` 写成持久 TCP 端口。
 
+`adb_wifi_enabled=1` 只表示无线调试开关开了，**不等于**在听 `5555`。重启后 `service.adb.tcp.port` 会被清空。要让 `adb connect 手机IP:5555` 开机后仍可用，需要把端口写进 persist（USB 执行一次即可，有 root 时应用会自己写）：
+
+```bat
+adb shell setprop persist.adb.tcp.port 5555
+adb shell getprop persist.adb.tcp.port
+```
+
+应返回 `5555`。若提示权限不足，需要 root。写成功后再重启，用手机 WLAN 地址连接，不要用网关地址。
+
 ## 编译
 
 需要 Android SDK 34 和 JDK 17+。

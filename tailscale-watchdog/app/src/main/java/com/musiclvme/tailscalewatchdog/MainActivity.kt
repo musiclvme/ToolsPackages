@@ -121,7 +121,10 @@ class MainActivity : AppCompatActivity() {
         }
         binding.statusWirelessDebug.text = status.wirelessDebugDetail.ifBlank { "无线调试：未知" }
         binding.statusWirelessDebug.setTextColor(
-            ContextCompat.getColor(this, if (status.wirelessDebugOn) R.color.ok else R.color.warn),
+            ContextCompat.getColor(
+                this,
+                if (status.wirelessDebugOn) R.color.ok else R.color.warn,
+            ),
         )
         binding.statusMonitor.text = when {
             status.recovering -> "监控：正在恢复"
@@ -162,20 +165,23 @@ class MainActivity : AppCompatActivity() {
 
         val wireless = WirelessDebugKeeper(this).snapshot()
         binding.setupWirelessDebug.text = when {
-            wireless.enabled -> "无线调试：已开启"
-            wireless.canWriteSecureSettings || wireless.rooted -> "无线调试：可自动打开"
-            else -> "无线调试：未授权，开机后无法自动打开"
+            wireless.tcp5555Ready -> "ADB 5555：已监听"
+            wireless.persistPort == WirelessDebugKeeper.TCP_PORT -> "ADB 5555：已写入 persist，等 adbd 生效"
+            wireless.canWriteSecureSettings || wireless.rooted -> "ADB 5555：未监听，开机后会尝试拉起"
+            else -> "ADB 5555：未监听，需要 USB 执行 setprop persist"
         }
         binding.setupWirelessDebug.setTextColor(
             color(
                 when {
-                    wireless.enabled -> R.color.ok
-                    wireless.canWriteSecureSettings || wireless.rooted -> R.color.warn
+                    wireless.tcp5555Ready -> R.color.ok
+                    wireless.canWriteSecureSettings || wireless.rooted ||
+                        wireless.persistPort == WirelessDebugKeeper.TCP_PORT -> R.color.warn
                     else -> R.color.bad
                 },
             ),
         )
         binding.setupWirelessGrant.text = WirelessDebugKeeper.GRANT_COMMAND
+        binding.setupWirelessPersist.text = WirelessDebugKeeper.PERSIST_COMMAND
         StatusStore.update {
             it.copy(
                 accessibilityOn = a11yOk,
