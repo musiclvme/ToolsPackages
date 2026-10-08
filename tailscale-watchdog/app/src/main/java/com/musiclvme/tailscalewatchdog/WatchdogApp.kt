@@ -30,5 +30,8 @@ class WatchdogApp : Application() {
                 setShowBadge(true)
             },
         )
+        if (WatchdogService.isWanted()) {
+            WatchdogService.start(this)
+        }
     }
 }
