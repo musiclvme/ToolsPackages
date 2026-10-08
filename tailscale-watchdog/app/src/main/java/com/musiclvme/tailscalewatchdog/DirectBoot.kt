@@ -6,24 +6,15 @@ import android.os.UserManager
 
 object DirectBoot {
     fun deviceContext(context: Context): Context {
-        val app = context.applicationContext
-        return if (app.isDeviceProtectedStorage) {
-            app
-        } else {
-            app.createDeviceProtectedStorageContext()
-        }
+        return context.applicationContext.createDeviceProtectedStorageContext()
     }
 
     fun prefs(context: Context, name: String): SharedPreferences {
-        val device = deviceContext(context)
-        if (isUnlocked(context)) {
+        val app = context.applicationContext
+        val device = deviceContext(app)
+        if (isUnlocked(app)) {
             try {
-                val credential = if (context.applicationContext.isDeviceProtectedStorage) {
-                    context.applicationContext.createCredentialProtectedStorageContext()
-                } else {
-                    context.applicationContext
-                }
-                device.moveSharedPreferencesFrom(credential, name)
+                device.moveSharedPreferencesFrom(app, name)
             } catch (_: Exception) {
                 // Already migrated, or credential storage is unavailable.
             }
