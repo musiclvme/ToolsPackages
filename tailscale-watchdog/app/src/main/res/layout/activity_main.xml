@@ -69,6 +69,13 @@
                         android:text="内网探测：未配置" />
 
                     <TextView
+                        android:id="@+id/statusWirelessDebug"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="无线调试：检测中" />
+
+                    <TextView
                         android:id="@+id/statusMonitor"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -133,6 +140,24 @@
                         android:layout_marginTop="4dp"
                         android:text="Tailscale：未安装" />
 
+                    <TextView
+                        android:id="@+id/setupWirelessDebug"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="无线调试授权：未授予" />
+
+                    <TextView
+                        android:id="@+id/setupWirelessGrant"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:text="adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECURE_SETTINGS"
+                        android:textIsSelectable="true"
+                        android:textSize="12sp"
+                        android:textColor="@color/muted" />
+
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnOpenA11y"
                         style="@style/Widget.Material3.Button.TonalButton"
@@ -168,6 +193,13 @@
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:text="开启实时监控" />
+
+                    <com.google.android.material.materialswitch.MaterialSwitch
+                        android:id="@+id/switchKeepWirelessDebug"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="开机后自动打开无线调试" />
 
                     <com.google.android.material.materialswitch.MaterialSwitch
                         android:id="@+id/switchRequireVpn"

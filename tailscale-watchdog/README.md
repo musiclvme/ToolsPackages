@@ -34,6 +34,20 @@ adb install -r dist\TSWatchdog-debug.apk
 
 可选：把“定时保洁”设成 30 或 60 分钟，即使当前看起来正常也会定期重连一次。
 
+## 开机后自动打开无线调试
+
+手机重启后，系统会关掉无线调试。看门狗可以自检这个开关，发现没开就重新打开。
+
+普通应用默认没权限改这个开关，需要**用 USB 授权一次**（只需做一次）：
+
+```bat
+adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECURE_SETTINGS
+```
+
+然后在应用里打开「开机后自动打开无线调试」。忽略电池优化后，开机并连上 Wi-Fi，看门狗会自己把无线调试打开。已配对过的电脑一般不必再配对，执行 `adb connect 手机IP:端口` 即可。
+
+已 root 的手机也可以不授予上述权限，应用会改用 root 打开开关，并把 `5555` 写成持久 TCP 端口。
+
 ## 编译
 
 需要 Android SDK 34 和 JDK 17+。

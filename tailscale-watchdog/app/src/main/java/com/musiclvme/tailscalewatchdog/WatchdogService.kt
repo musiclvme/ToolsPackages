@@ -26,6 +26,7 @@ class WatchdogService : Service() {
     private lateinit var probe: NetworkProbe
     private lateinit var recovery: RecoveryEngine
     private lateinit var tailscale: TailscaleController
+    private lateinit var wireless: WirelessDebugKeeper
     private var consecutiveFailures = 0
     private var manualRequested = false
 
@@ -34,6 +35,7 @@ class WatchdogService : Service() {
         probe = NetworkProbe(this)
         recovery = RecoveryEngine(this)
         tailscale = TailscaleController(this)
+        wireless = WirelessDebugKeeper(this)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -42,9 +44,11 @@ class WatchdogService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 AppPrefs.monitorEnabled = false
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return START_NOT_STICKY
+                if (!AppPrefs.keepWirelessDebug) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
             }
             ACTION_RECOVER_NOW -> manualRequested = true
         }
@@ -65,24 +69,33 @@ class WatchdogService : Service() {
     private suspend fun monitorLoop() {
         EventLog.add("监控服务已启动")
         StatusStore.update { it.copy(monitoring = true) }
-        while (scope.isActive && AppPrefs.monitorEnabled) {
+        while (scope.isActive && isWanted()) {
+            val debugSnap = if (AppPrefs.keepWirelessDebug) {
+                wireless.ensureEnabled()
+                wireless.snapshot()
+            } else {
+                wireless.snapshot()
+            }
             val settings = AppPrefs.toSettings()
             val snap = probe.probe(settings.canary)
-            if (HealthPolicy.isUnhealthy(snap, settings)) {
-                consecutiveFailures += 1
-            } else {
-                consecutiveFailures = 0
+            var reason: RecoverReason? = null
+            if (AppPrefs.monitorEnabled) {
+                if (HealthPolicy.isUnhealthy(snap, settings)) {
+                    consecutiveFailures += 1
+                } else {
+                    consecutiveFailures = 0
+                }
+                val now = System.currentTimeMillis()
+                reason = HealthPolicy.shouldRecover(
+                    probe = snap,
+                    settings = settings,
+                    consecutiveFailures = consecutiveFailures,
+                    nowMs = now,
+                    lastRecoveryAtMs = AppPrefs.lastRecoveryAtMs,
+                    lastPreventiveAtMs = AppPrefs.lastPreventiveAtMs,
+                    forceManual = manualRequested,
+                )
             }
-            val now = System.currentTimeMillis()
-            val reason = HealthPolicy.shouldRecover(
-                probe = snap,
-                settings = settings,
-                consecutiveFailures = consecutiveFailures,
-                nowMs = now,
-                lastRecoveryAtMs = AppPrefs.lastRecoveryAtMs,
-                lastPreventiveAtMs = AppPrefs.lastPreventiveAtMs,
-                forceManual = manualRequested,
-            )
             manualRequested = false
             val lastText = if (AppPrefs.lastRecoveryAtMs == 0L) {
                 "尚未恢复过"
@@ -97,10 +110,14 @@ class WatchdogService : Service() {
                     lastRecoveryText = lastText,
                     accessibilityOn = WatchdogAccessibilityService.isEnabled(this@WatchdogService),
                     tailscaleInstalled = tailscale.isInstalled(),
+                    wirelessDebugOn = debugSnap.enabled,
+                    wirelessDebugDetail = debugSnap.detail,
+                    canWriteWirelessDebug = debugSnap.canWriteSecureSettings || debugSnap.rooted,
                 )
             }
-            startForeground(NOTIFICATION_ID, buildNotification(snap.detail))
-            if (reason != null && !StatusStore.current.recovering) {
+            val notice = if (AppPrefs.monitorEnabled) snap.detail else debugSnap.detail
+            startForeground(NOTIFICATION_ID, buildNotification(notice))
+            if (AppPrefs.monitorEnabled && reason != null && !StatusStore.current.recovering) {
                 EventLog.add(
                     when (reason) {
                         RecoverReason.UNHEALTHY -> "连续失败 ${consecutiveFailures} 次，开始自动恢复"
@@ -111,7 +128,7 @@ class WatchdogService : Service() {
                 recovery.recover(reason)
                 consecutiveFailures = 0
             }
-            delay(settings.let { AppPrefs.intervalSec * 1000L })
+            delay(AppPrefs.intervalSec * 1000L)
         }
         EventLog.add("监控服务已停止")
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -181,6 +198,12 @@ class WatchdogService : Service() {
             } else {
                 context.startService(intent)
             }
+        }
+
+        fun isWanted(): Boolean = AppPrefs.monitorEnabled || AppPrefs.keepWirelessDebug
+
+        fun sync(context: Context) {
+            if (isWanted()) start(context) else stop(context)
         }
     }
 }

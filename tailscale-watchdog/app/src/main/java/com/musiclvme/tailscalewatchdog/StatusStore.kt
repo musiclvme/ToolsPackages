@@ -10,6 +10,9 @@ data class UiStatus(
     val lastRecoveryText: String = "尚未恢复过",
     val accessibilityOn: Boolean = false,
     val tailscaleInstalled: Boolean = false,
+    val wirelessDebugOn: Boolean = false,
+    val wirelessDebugDetail: String = "无线调试：未知",
+    val canWriteWirelessDebug: Boolean = false,
 )
 
 object StatusStore {

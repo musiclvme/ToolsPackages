@@ -14,6 +14,7 @@ object AppPrefs {
     private const val KEY_PREVENTIVE_MIN = "preventive_min"
     private const val KEY_LAST_RECOVERY = "last_recovery_ms"
     private const val KEY_LAST_PREVENTIVE = "last_preventive_ms"
+    private const val KEY_KEEP_WIRELESS_DEBUG = "keep_wireless_debug"
 
     private lateinit var prefs: SharedPreferences
 
@@ -56,6 +57,10 @@ object AppPrefs {
     var lastPreventiveAtMs: Long
         get() = prefs.getLong(KEY_LAST_PREVENTIVE, 0L)
         set(value) { prefs.edit().putLong(KEY_LAST_PREVENTIVE, value).apply() }
+
+    var keepWirelessDebug: Boolean
+        get() = prefs.getBoolean(KEY_KEEP_WIRELESS_DEBUG, true)
+        set(value) { prefs.edit().putBoolean(KEY_KEEP_WIRELESS_DEBUG, value).apply() }
 
     fun toSettings(): WatchdogSettings = WatchdogSettings(
         requireVpn = requireVpn,
