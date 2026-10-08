@@ -3,6 +3,8 @@ package com.musiclvme.tailscalewatchdog
 import android.content.Context
 import android.content.pm.PackageManager
 import android.provider.Settings
+import java.net.InetSocketAddress
+import java.net.Socket
 import java.util.concurrent.TimeUnit
 
 data class WirelessDebugSnapshot(
@@ -52,7 +54,9 @@ class WirelessDebugKeeper(context: Context) {
             append(if (wifiOn) "无线调试开关：开" else "无线调试开关：关")
             append("；TCP $port：")
             append(if (ready) "已监听" else "未监听")
-            append("（persist=$persistText, live=$liveText）")
+            append("（persist=$persistText, live=$liveText")
+            if (ready && live.toIntOrNull() != port) append(", 本机已接通")
+            append("）")
         }
         return WirelessDebugSnapshot(
             wifiToggleOn = wifiOn,
@@ -98,7 +102,22 @@ class WirelessDebugKeeper(context: Context) {
         return action
     }
 
-    fun isTcpReady(): Boolean = livePort().toIntOrNull() == desiredPort()
+    fun isTcpReady(): Boolean {
+        if (livePort().toIntOrNull() == desiredPort()) return true
+        return isPortOpen(desiredPort())
+    }
+
+    private fun isPortOpen(port: Int): Boolean {
+        return try {
+            Socket().use { socket ->
+                socket.tcpNoDelay = true
+                socket.connect(InetSocketAddress("127.0.0.1", port), 400)
+                socket.isConnected
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     fun hasWriteSecureSettings(): Boolean {
         return app.checkSelfPermission(WRITE_SECURE) == PackageManager.PERMISSION_GRANTED
