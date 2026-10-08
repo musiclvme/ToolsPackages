@@ -168,9 +168,18 @@ class WatchdogAccessibilityService : AccessibilityService() {
             private set
 
         fun isEnabled(context: Context): Boolean {
+            if (instance != null) return true
+            val listed = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            )
+            if (AccessibilitySetting.isPackageEnabled(listed, context.packageName)) return true
             val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-            val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            return enabled.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+            val types = AccessibilityServiceInfo.FEEDBACK_GENERIC or
+                AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+            return manager.getEnabledAccessibilityServiceList(types).any { info ->
+                info.resolveInfo?.serviceInfo?.packageName == context.packageName
+            }
         }
     }
 }
