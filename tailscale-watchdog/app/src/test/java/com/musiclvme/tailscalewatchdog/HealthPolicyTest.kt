@@ -55,6 +55,14 @@ class HealthPolicyTest {
     }
 
     @Test
+    fun wifiBounceOnlyWhenNetworkIsDown() {
+        assertFalse(HealthPolicy.needsWifiBounce(healthy.copy(vpnUp = false)))
+        assertTrue(HealthPolicy.needsWifiBounce(healthy.copy(hasInternet = false)))
+        assertTrue(HealthPolicy.needsTailscale(healthy.copy(vpnUp = false), WatchdogSettings()))
+        assertFalse(HealthPolicy.needsTailscale(healthy, WatchdogSettings()))
+    }
+
+    @Test
     fun preventiveWhenIntervalElapsed() {
         val reason = HealthPolicy.shouldRecover(
             probe = healthy,

@@ -57,12 +57,19 @@ class WatchdogAccessibilityService : AccessibilityService() {
         true
     }
 
-    suspend fun toggleTailscale(): Boolean = withContext(Dispatchers.Main) {
+    suspend fun launchTailscale(): Boolean = withContext(Dispatchers.Main) {
         val launch = packageManager.getLaunchIntentForPackage(TailscaleController.PACKAGE)
             ?: return@withContext false
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(launch)
-        delay(1_800)
+        return@withContext try {
+            startActivity(launch)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun toggleTailscaleSwitch(): Boolean = withContext(Dispatchers.Main) {
         val toggle = waitForAnySwitch(6) ?: return@withContext false
         val checked = toggle.isChecked
         click(toggle)
@@ -77,6 +84,12 @@ class WatchdogAccessibilityService : AccessibilityService() {
         }
         performGlobalAction(GLOBAL_ACTION_HOME)
         true
+    }
+
+    suspend fun toggleTailscale(): Boolean {
+        if (!launchTailscale()) return false
+        delay(1_800)
+        return toggleTailscaleSwitch()
     }
 
     private fun openWifiSettings() {

@@ -29,6 +29,8 @@ class WatchdogService : Service() {
     private lateinit var wireless: WirelessDebugKeeper
     private var consecutiveFailures = 0
     private var manualRequested = false
+    private val startedAtMs = System.currentTimeMillis()
+    private var bootVpnNudgeDone = false
 
     override fun onCreate() {
         super.onCreate()
@@ -80,14 +82,24 @@ class WatchdogService : Service() {
             val snap = probe.probe(settings.canary)
             var reason: RecoverReason? = null
             if (AppPrefs.monitorEnabled) {
-                if (HealthPolicy.isUnhealthy(snap, settings)) {
+                if (snap.vpnUp) tailscale.cancelStartNotification()
+                val bootGrace = System.currentTimeMillis() - startedAtMs < BOOT_GRACE_MS
+                val vpnOnly = snap.hasInternet && HealthPolicy.needsTailscale(snap, settings) &&
+                    !HealthPolicy.needsWifiBounce(snap)
+                if (vpnOnly && bootGrace && !bootVpnNudgeDone && !StatusStore.current.recovering) {
+                    bootVpnNudgeDone = true
+                    EventLog.add("开机宽限期：网络正常，只尝试拉起 Tailscale，不拨 Wi-Fi")
+                    tailscale.ensureVpnUp()
+                }
+                val probeForPolicy = if (bootGrace && vpnOnly) snap.copy(vpnUp = true) else snap
+                if (HealthPolicy.isUnhealthy(probeForPolicy, settings)) {
                     consecutiveFailures += 1
-                } else {
+                } else if (!vpnOnly || snap.vpnUp) {
                     consecutiveFailures = 0
                 }
                 val now = System.currentTimeMillis()
                 reason = HealthPolicy.shouldRecover(
-                    probe = snap,
+                    probe = probeForPolicy,
                     settings = settings,
                     consecutiveFailures = consecutiveFailures,
                     nowMs = now,
@@ -175,6 +187,7 @@ class WatchdogService : Service() {
         const val NOTIFICATION_ID = 42
         const val ACTION_STOP = "com.musiclvme.tailscalewatchdog.STOP"
         const val ACTION_RECOVER_NOW = "com.musiclvme.tailscalewatchdog.RECOVER_NOW"
+        private const val BOOT_GRACE_MS = 90_000L
         private val TIME = SimpleDateFormat("MM-dd HH:mm:ss", Locale.CHINA)
 
         fun start(context: Context) {

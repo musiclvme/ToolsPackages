@@ -62,6 +62,9 @@ adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECU
 5. 确认 Tailscale 已安装，并同样关闭电池优化
 6. 建议填写一个只在 Tailscale 内网能通的地址，例如 `100.x.x.x` 或 `nas.xxx.ts.net:443`
 7. 打开“实时监控”
+8. 在 Tailscale 里关闭电池优化，并在系统 **VPN → Tailscale → 始终开启**（有的机型叫 Always-on VPN）
+
+重启后 Android 通常不允许普通应用在后台直接打开别的界面。看门狗会先发 `CONNECT_VPN`，并用无障碍尝试打开 Tailscale；若仍起不来会发一条可点击通知。**网络正常、只是 VPN 没开时，不会再去拨 Wi-Fi**，避免把看门狗自己弄重启。
 
 可选：把“定时保洁”设成 30 或 60 分钟，即使当前看起来正常也会定期重连一次。
 
