@@ -17,7 +17,7 @@ object EventLog {
     private val lock = Any()
 
     fun init(context: Context) {
-        prefs = context.applicationContext.getSharedPreferences(FILE, Context.MODE_PRIVATE)
+        prefs = DirectBoot.prefs(context, FILE)
     }
 
     fun add(message: String) {

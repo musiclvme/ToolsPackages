@@ -32,6 +32,16 @@ object HealthPolicy {
         return false
     }
 
+    fun needsWifiBounce(probe: ProbeResult): Boolean {
+        return !probe.hasInternet || !probe.wifiConnected
+    }
+
+    fun needsTailscale(probe: ProbeResult, settings: WatchdogSettings): Boolean {
+        if (settings.requireVpn && !probe.vpnUp) return true
+        if (probe.canaryOk == false) return true
+        return false
+    }
+
     fun shouldRecover(
         probe: ProbeResult,
         settings: WatchdogSettings,

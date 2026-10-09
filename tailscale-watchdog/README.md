@@ -7,14 +7,45 @@
 
 用来处理“Wi-Fi 挂一段时间后网络变脏、Tailscale 也跟着不行”的情况。
 
-## 安装
+## 安装（覆盖旧版时请先卸载）
 
-用 USB 连接手机并打开 USB 调试后：
+云端每次编出来的 debug 包签名可能不同。手机上已经装过旧版时，直接 `adb install -r` 会失败：
+
+```
+INSTALL_FAILED_UPDATE_INCOMPATIBLE: signatures do not match previously installed version
+```
+
+请按这个顺序：
+
+1. USB 连接手机，打开 USB 调试，确认设备是 `device`：
 
 ```bat
 adb devices
-adb install -r dist\TSWatchdog-debug.apk
 ```
+
+2. **先卸载旧版**（应用里的设置会清掉）：
+
+```bat
+adb uninstall com.musiclvme.tailscalewatchdog
+```
+
+若提示没有这个包，可以忽略，继续安装。
+
+3. 安装新 APK（把路径换成你下好的文件）：
+
+```bat
+adb install TSWatchdog-debug.apk
+```
+
+当前包：`tailscale-watchdog/dist/TSWatchdog-debug.apk`
+
+4. 授权一次（卸载重装后必须再做）：
+
+```bat
+adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECURE_SETTINGS
+```
+
+5. **打开一次应用**，确认通知、忽略电池优化、无障碍，以及「开机后自动打开无线调试」。
 
 若 `adb devices` 显示 `unauthorized`：
 
@@ -31,8 +62,80 @@ adb install -r dist\TSWatchdog-debug.apk
 5. 确认 Tailscale 已安装，并同样关闭电池优化
 6. 建议填写一个只在 Tailscale 内网能通的地址，例如 `100.x.x.x` 或 `nas.xxx.ts.net:443`
 7. 打开“实时监控”
+8. 在 Tailscale 里关闭电池优化，并在系统 **VPN → Tailscale → 始终开启**（有的机型叫 Always-on VPN）
+
+重启后 Android 通常不允许普通应用在后台直接打开别的界面。看门狗会先发 `CONNECT_VPN`，并用无障碍尝试打开 Tailscale；若仍起不来会发一条可点击通知。**网络正常、只是 VPN 没开时，不会再去拨 Wi-Fi**，避免把看门狗自己弄重启。
 
 可选：把“定时保洁”设成 30 或 60 分钟，即使当前看起来正常也会定期重连一次。
+
+## 锁屏未解锁也能后台启动
+
+手机有锁屏密码时，重启后系统会先进入 Direct Boot：未解锁前，普通应用读不到加密存储，收不到普通开机广播，看起来就像没在后台启动。
+
+1.4.0 起看门狗是 Direct Boot 感知的，收到 `LOCKED_BOOT_COMPLETED` 就会在锁屏后面拉起前台服务（锁屏上也能看到常驻通知）：
+
+- **未解锁**：继续维持无线调试 / ADB TCP
+- **解锁后**：再尝试拉起 Tailscale；必要时才重连 Wi-Fi
+
+无障碍和打开 Tailscale 界面仍然要等解锁。部分国产系统会拦截未解锁启动，需要在系统设置里允许本应用「自启动 / 后台运行」，并关掉电池优化。
+
+## 开机后自动打开无线调试
+
+手机重启后，系统会关掉无线调试。看门狗可以自检这个开关，发现没开就重新打开。
+
+普通应用默认没权限改这个开关，卸载重装后需要**再用 USB 授权一次**：
+
+```bat
+adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECURE_SETTINGS
+```
+
+然后在应用里打开「开机后自动打开无线调试」。忽略电池优化后，开机并连上 Wi-Fi，看门狗会自己把无线调试打开。
+
+已 root 的手机也可以不授予上述权限，应用会改用 root 打开开关，并把配置的 TCP 端口写成 persist。
+
+### 用 TCP 端口远程 adb（默认 5555）
+
+`adb_wifi_enabled=1` 只表示无线调试开关开了，**不等于**正在听 TCP 端口。应用里可以改 **ADB TCP 端口**，默认 `5555`。
+
+当前这次要立刻用网络调试（USB 已连上时）：
+
+```bat
+adb tcpip 5555
+adb shell ip addr show wlan0
+adb connect 手机WLAN的IP:5555
+adb devices
+```
+
+用手机 `wlan0` 的 `inet` 地址，不要用网关地址。
+
+断开电脑这边的连接：
+
+```bat
+adb disconnect 手机WLAN的IP:5555
+```
+
+断开全部网络 adb：
+
+```bat
+adb disconnect
+```
+
+把手机改回只走 USB：
+
+```bat
+adb usb
+```
+
+`adb tcpip 5555` 只对**到下次重启之前**有效。重启后 `service.adb.tcp.port` 通常会被清空，需要再执行一次 `adb tcpip`，或把端口写进 persist。
+
+USB 执行一次（端口若在应用里改过，把 `5555` 换成那个值）：
+
+```bat
+adb shell setprop persist.adb.tcp.port 5555
+adb shell getprop persist.adb.tcp.port
+```
+
+应返回同一个数字。若提示权限不足，需要 root。即使 persist 已经是 `5555`，也还要 `adb tcpip 5555`（或重启且该 ROM 认 persist）之后，`adb connect` 才不会 `10061 积极拒绝`。
 
 ## 编译
 
@@ -44,4 +147,4 @@ echo "sdk.dir=/path/to/android-sdk" > local.properties
 ./gradlew :app:assembleDebug
 ```
 
-APK 输出在 `app/build/outputs/apk/debug/app-debug.apk`。
+APK 输出在 `app/build/outputs/apk/debug/app-debug.apk`。新编的 debug 包如果签名和手机上已装的不一致，安装前仍要先 `adb uninstall`。

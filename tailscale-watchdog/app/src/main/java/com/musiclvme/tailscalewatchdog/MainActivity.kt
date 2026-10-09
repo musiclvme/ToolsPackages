@@ -37,12 +37,13 @@ class MainActivity : AppCompatActivity() {
         bindPrefsToInputs()
         binding.switchMonitor.setOnCheckedChangeListener { _, checked ->
             AppPrefs.monitorEnabled = checked
-            if (checked) {
-                ensureNotificationPermission()
-                WatchdogService.start(this)
-            } else {
-                WatchdogService.stop(this)
-            }
+            if (checked) ensureNotificationPermission()
+            WatchdogService.sync(this)
+        }
+        binding.switchKeepWirelessDebug.setOnCheckedChangeListener { _, checked ->
+            AppPrefs.keepWirelessDebug = checked
+            if (checked) ensureNotificationPermission()
+            WatchdogService.sync(this)
         }
         binding.btnSave.setOnClickListener { saveInputs() }
         binding.btnRecover.setOnClickListener {
@@ -60,9 +61,7 @@ class MainActivity : AppCompatActivity() {
         EventLog.addListener(logListener)
         renderLog()
         refreshSetup()
-        if (AppPrefs.monitorEnabled) {
-            WatchdogService.start(this)
-        }
+        WatchdogService.sync(this)
     }
 
     override fun onResume() {
@@ -79,12 +78,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun bindPrefsToInputs() {
         binding.switchMonitor.isChecked = AppPrefs.monitorEnabled
+        binding.switchKeepWirelessDebug.isChecked = AppPrefs.keepWirelessDebug
         binding.switchRequireVpn.isChecked = AppPrefs.requireVpn
         binding.inputInterval.setText(AppPrefs.intervalSec.toString())
         binding.inputFailures.setText(AppPrefs.failureThreshold.toString())
         binding.inputCooldown.setText(AppPrefs.cooldownSec.toString())
         binding.inputCanary.setText(AppPrefs.canary)
         binding.inputPreventive.setText(AppPrefs.preventiveMin.toString())
+        binding.inputAdbPort.setText(AppPrefs.adbTcpPort.toString())
     }
 
     private fun saveInputs() {
@@ -94,6 +95,8 @@ class MainActivity : AppCompatActivity() {
         AppPrefs.cooldownSec = binding.inputCooldown.text?.toString()?.toIntOrNull() ?: 180
         AppPrefs.canary = binding.inputCanary.text?.toString().orEmpty()
         AppPrefs.preventiveMin = binding.inputPreventive.text?.toString()?.toIntOrNull() ?: 0
+        AppPrefs.adbTcpPort = binding.inputAdbPort.text?.toString()?.toIntOrNull()
+            ?: AppPrefs.DEFAULT_ADB_TCP_PORT
         bindPrefsToInputs()
         Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show()
     }
@@ -119,6 +122,13 @@ class MainActivity : AppCompatActivity() {
             true -> "内网探测：成功"
             false -> "内网探测：失败"
         }
+        binding.statusWirelessDebug.text = status.wirelessDebugDetail.ifBlank { "无线调试：未知" }
+        binding.statusWirelessDebug.setTextColor(
+            ContextCompat.getColor(
+                this,
+                if (status.wirelessDebugOn) R.color.ok else R.color.warn,
+            ),
+        )
         binding.statusMonitor.text = when {
             status.recovering -> "监控：正在恢复"
             status.monitoring -> "监控：运行中，连续失败 ${status.consecutiveFailures} 次"
@@ -155,8 +165,35 @@ class MainActivity : AppCompatActivity() {
         val tsOk = tailscale.isInstalled()
         binding.setupTailscale.text = if (tsOk) "Tailscale：已安装" else "Tailscale：未安装 com.tailscale.ipn"
         binding.setupTailscale.setTextColor(color(if (tsOk) R.color.ok else R.color.bad))
+
+        val wireless = WirelessDebugKeeper(this).snapshot()
+        val port = wireless.desiredPort
+        binding.setupWirelessDebug.text = when {
+            wireless.tcpReady -> "ADB $port：已监听"
+            wireless.persistPort == port.toString() -> "ADB $port：已写入 persist，等 adbd 生效"
+            wireless.canWriteSecureSettings || wireless.rooted -> "ADB $port：未监听，开机后会尝试拉起"
+            else -> "ADB $port：未监听，需要 USB 执行 setprop persist"
+        }
+        binding.setupWirelessDebug.setTextColor(
+            color(
+                when {
+                    wireless.tcpReady -> R.color.ok
+                    wireless.canWriteSecureSettings || wireless.rooted ||
+                        wireless.persistPort == port.toString() -> R.color.warn
+                    else -> R.color.bad
+                },
+            ),
+        )
+        binding.setupWirelessGrant.text = WirelessDebugKeeper.GRANT_COMMAND
+        binding.setupWirelessPersist.text = WirelessDebugKeeper.persistCommand(port)
         StatusStore.update {
-            it.copy(accessibilityOn = a11yOk, tailscaleInstalled = tsOk)
+            it.copy(
+                accessibilityOn = a11yOk,
+                tailscaleInstalled = tsOk,
+                wirelessDebugOn = wireless.enabled,
+                wirelessDebugDetail = wireless.detail,
+                canWriteWirelessDebug = wireless.canWriteSecureSettings || wireless.rooted,
+            )
         }
     }
 

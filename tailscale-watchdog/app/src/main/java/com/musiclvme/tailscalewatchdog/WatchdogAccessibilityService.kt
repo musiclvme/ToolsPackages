@@ -57,12 +57,19 @@ class WatchdogAccessibilityService : AccessibilityService() {
         true
     }
 
-    suspend fun toggleTailscale(): Boolean = withContext(Dispatchers.Main) {
+    suspend fun launchTailscale(): Boolean = withContext(Dispatchers.Main) {
         val launch = packageManager.getLaunchIntentForPackage(TailscaleController.PACKAGE)
             ?: return@withContext false
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        startActivity(launch)
-        delay(1_800)
+        return@withContext try {
+            startActivity(launch)
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    suspend fun toggleTailscaleSwitch(): Boolean = withContext(Dispatchers.Main) {
         val toggle = waitForAnySwitch(6) ?: return@withContext false
         val checked = toggle.isChecked
         click(toggle)
@@ -77,6 +84,12 @@ class WatchdogAccessibilityService : AccessibilityService() {
         }
         performGlobalAction(GLOBAL_ACTION_HOME)
         true
+    }
+
+    suspend fun toggleTailscale(): Boolean {
+        if (!launchTailscale()) return false
+        delay(1_800)
+        return toggleTailscaleSwitch()
     }
 
     private fun openWifiSettings() {
@@ -168,9 +181,18 @@ class WatchdogAccessibilityService : AccessibilityService() {
             private set
 
         fun isEnabled(context: Context): Boolean {
+            if (instance != null) return true
+            val listed = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            )
+            if (AccessibilitySetting.isPackageEnabled(listed, context.packageName)) return true
             val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-            val enabled = manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
-            return enabled.any { it.resolveInfo.serviceInfo.packageName == context.packageName }
+            val types = AccessibilityServiceInfo.FEEDBACK_GENERIC or
+                AccessibilityServiceInfo.FEEDBACK_ALL_MASK
+            return manager.getEnabledAccessibilityServiceList(types).any { info ->
+                info.resolveInfo?.serviceInfo?.packageName == context.packageName
+            }
         }
     }
 }

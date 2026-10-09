@@ -26,14 +26,20 @@ class WatchdogService : Service() {
     private lateinit var probe: NetworkProbe
     private lateinit var recovery: RecoveryEngine
     private lateinit var tailscale: TailscaleController
+    private lateinit var wireless: WirelessDebugKeeper
     private var consecutiveFailures = 0
     private var manualRequested = false
+    private var startedAtMs = System.currentTimeMillis()
+    private var bootVpnNudgeDone = false
+    private var unlockHandled = false
+    private var loggedLockedWait = false
 
     override fun onCreate() {
         super.onCreate()
         probe = NetworkProbe(this)
         recovery = RecoveryEngine(this)
         tailscale = TailscaleController(this)
+        wireless = WirelessDebugKeeper(this)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -42,11 +48,14 @@ class WatchdogService : Service() {
         when (intent?.action) {
             ACTION_STOP -> {
                 AppPrefs.monitorEnabled = false
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-                return START_NOT_STICKY
+                if (!AppPrefs.keepWirelessDebug) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                    stopSelf()
+                    return START_NOT_STICKY
+                }
             }
             ACTION_RECOVER_NOW -> manualRequested = true
+            ACTION_USER_UNLOCKED -> handleUserUnlocked()
         }
         startForeground(NOTIFICATION_ID, buildNotification("正在检测 Wi-Fi 和 Tailscale"))
         if (loopJob?.isActive != true) {
@@ -62,27 +71,73 @@ class WatchdogService : Service() {
         super.onDestroy()
     }
 
+    private fun handleUserUnlocked() {
+        AppPrefs.init(this)
+        EventLog.init(this)
+        if (unlockHandled) return
+        unlockHandled = true
+        bootVpnNudgeDone = false
+        startedAtMs = System.currentTimeMillis()
+        EventLog.add("设备已解锁，继续后台监控并尝试拉起 Tailscale")
+    }
+
     private suspend fun monitorLoop() {
-        EventLog.add("监控服务已启动")
+        val lockedAtStart = !DirectBoot.isUnlocked(this)
+        if (!lockedAtStart) {
+            unlockHandled = true
+        }
+        EventLog.add(
+            if (lockedAtStart) {
+                "监控服务已启动（锁屏未解锁，Direct Boot）"
+            } else {
+                "监控服务已启动"
+            },
+        )
         StatusStore.update { it.copy(monitoring = true) }
-        while (scope.isActive && AppPrefs.monitorEnabled) {
+        while (scope.isActive && isWanted()) {
+            val unlocked = DirectBoot.isUnlocked(this)
+            if (unlocked && !unlockHandled) {
+                handleUserUnlocked()
+            } else if (!unlocked && !loggedLockedWait) {
+                loggedLockedWait = true
+                EventLog.add("锁屏未解锁：已在后台运行，先维持无线调试；解锁后再拉起 Tailscale / 重连 Wi-Fi")
+            }
+            val debugSnap = if (AppPrefs.keepWirelessDebug) {
+                wireless.ensureEnabled()
+                wireless.snapshot()
+            } else {
+                wireless.snapshot()
+            }
             val settings = AppPrefs.toSettings()
             val snap = probe.probe(settings.canary)
-            if (HealthPolicy.isUnhealthy(snap, settings)) {
-                consecutiveFailures += 1
-            } else {
-                consecutiveFailures = 0
+            var reason: RecoverReason? = null
+            if (AppPrefs.monitorEnabled && unlocked) {
+                if (snap.vpnUp) tailscale.cancelStartNotification()
+                val bootGrace = System.currentTimeMillis() - startedAtMs < BOOT_GRACE_MS
+                val vpnOnly = snap.hasInternet && HealthPolicy.needsTailscale(snap, settings) &&
+                    !HealthPolicy.needsWifiBounce(snap)
+                if (vpnOnly && bootGrace && !bootVpnNudgeDone && !StatusStore.current.recovering) {
+                    bootVpnNudgeDone = true
+                    EventLog.add("开机宽限期：网络正常，只尝试拉起 Tailscale，不拨 Wi-Fi")
+                    tailscale.ensureVpnUp()
+                }
+                val probeForPolicy = if (bootGrace && vpnOnly) snap.copy(vpnUp = true) else snap
+                if (HealthPolicy.isUnhealthy(probeForPolicy, settings)) {
+                    consecutiveFailures += 1
+                } else if (!vpnOnly || snap.vpnUp) {
+                    consecutiveFailures = 0
+                }
+                val now = System.currentTimeMillis()
+                reason = HealthPolicy.shouldRecover(
+                    probe = probeForPolicy,
+                    settings = settings,
+                    consecutiveFailures = consecutiveFailures,
+                    nowMs = now,
+                    lastRecoveryAtMs = AppPrefs.lastRecoveryAtMs,
+                    lastPreventiveAtMs = AppPrefs.lastPreventiveAtMs,
+                    forceManual = manualRequested,
+                )
             }
-            val now = System.currentTimeMillis()
-            val reason = HealthPolicy.shouldRecover(
-                probe = snap,
-                settings = settings,
-                consecutiveFailures = consecutiveFailures,
-                nowMs = now,
-                lastRecoveryAtMs = AppPrefs.lastRecoveryAtMs,
-                lastPreventiveAtMs = AppPrefs.lastPreventiveAtMs,
-                forceManual = manualRequested,
-            )
             manualRequested = false
             val lastText = if (AppPrefs.lastRecoveryAtMs == 0L) {
                 "尚未恢复过"
@@ -97,10 +152,18 @@ class WatchdogService : Service() {
                     lastRecoveryText = lastText,
                     accessibilityOn = WatchdogAccessibilityService.isEnabled(this@WatchdogService),
                     tailscaleInstalled = tailscale.isInstalled(),
+                    wirelessDebugOn = debugSnap.enabled,
+                    wirelessDebugDetail = debugSnap.detail,
+                    canWriteWirelessDebug = debugSnap.canWriteSecureSettings || debugSnap.rooted,
                 )
             }
-            startForeground(NOTIFICATION_ID, buildNotification(snap.detail))
-            if (reason != null && !StatusStore.current.recovering) {
+            val notice = when {
+                !unlocked -> "锁屏未解锁，后台已启动"
+                AppPrefs.monitorEnabled -> snap.detail
+                else -> debugSnap.detail
+            }
+            startForeground(NOTIFICATION_ID, buildNotification(notice))
+            if (AppPrefs.monitorEnabled && unlocked && reason != null && !StatusStore.current.recovering) {
                 EventLog.add(
                     when (reason) {
                         RecoverReason.UNHEALTHY -> "连续失败 ${consecutiveFailures} 次，开始自动恢复"
@@ -111,7 +174,7 @@ class WatchdogService : Service() {
                 recovery.recover(reason)
                 consecutiveFailures = 0
             }
-            delay(settings.let { AppPrefs.intervalSec * 1000L })
+            delay(AppPrefs.intervalSec * 1000L)
         }
         EventLog.add("监控服务已停止")
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -143,6 +206,7 @@ class WatchdogService : Service() {
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setContentIntent(open)
             .addAction(0, getString(R.string.action_recover_now), recover)
             .addAction(0, getString(R.string.action_stop), stop)
@@ -158,15 +222,12 @@ class WatchdogService : Service() {
         const val NOTIFICATION_ID = 42
         const val ACTION_STOP = "com.musiclvme.tailscalewatchdog.STOP"
         const val ACTION_RECOVER_NOW = "com.musiclvme.tailscalewatchdog.RECOVER_NOW"
+        const val ACTION_USER_UNLOCKED = "com.musiclvme.tailscalewatchdog.USER_UNLOCKED"
+        private const val BOOT_GRACE_MS = 90_000L
         private val TIME = SimpleDateFormat("MM-dd HH:mm:ss", Locale.CHINA)
 
         fun start(context: Context) {
-            val intent = Intent(context, WatchdogService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            startWithAction(context, null)
         }
 
         fun stop(context: Context) {
@@ -175,7 +236,27 @@ class WatchdogService : Service() {
         }
 
         fun recoverNow(context: Context) {
-            val intent = Intent(context, WatchdogService::class.java).setAction(ACTION_RECOVER_NOW)
+            startWithAction(context, ACTION_RECOVER_NOW)
+        }
+
+        fun notifyUserUnlocked(context: Context) {
+            AppPrefs.init(context)
+            EventLog.init(context)
+            if (!isWanted()) return
+            startWithAction(context, ACTION_USER_UNLOCKED)
+        }
+
+        fun isWanted(): Boolean = AppPrefs.monitorEnabled || AppPrefs.keepWirelessDebug
+
+        fun sync(context: Context) {
+            AppPrefs.init(context)
+            EventLog.init(context)
+            if (isWanted()) start(context) else stop(context)
+        }
+
+        private fun startWithAction(context: Context, action: String?) {
+            val intent = Intent(context, WatchdogService::class.java)
+            if (action != null) intent.action = action
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
             } else {

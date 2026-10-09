@@ -20,5 +20,18 @@ class WatchdogApp : Application() {
                 setShowBadge(false)
             },
         )
+        manager.createNotificationChannel(
+            NotificationChannel(
+                TailscaleController.CHANNEL_ID,
+                "Tailscale 拉起",
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = "重启后无法后台打开 Tailscale 时提醒点击"
+                setShowBadge(true)
+            },
+        )
+        if (WatchdogService.isWanted()) {
+            WatchdogService.start(this)
+        }
     }
 }

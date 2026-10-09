@@ -11,8 +11,8 @@ android {
         applicationId = "com.musiclvme.tailscalewatchdog"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 8
+        versionName = "1.4.0"
     }
 
     buildTypes {
