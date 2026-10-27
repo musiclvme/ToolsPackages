@@ -90,9 +90,18 @@ function num(el, fallback) {
   return Number.isFinite(v) ? v : fallback;
 }
 
+function algoNeedsCutoff(algo) {
+  return (
+    algo.startsWith("fir-") ||
+    algo === "iir-highpass" ||
+    algo === "iir-lowpass"
+  );
+}
+
 function updateParamVisibility() {
   const algo = els.algo.value;
   const sig = els.signalType.value;
+  document.getElementById("cutoffRow").hidden = !algoNeedsCutoff(algo);
   els.bandRow.hidden = !algoNeedsBand(algo);
   els.orderRow.hidden = !algoNeedsOrder(algo);
   els.preRow.hidden = !algoNeedsPreA(algo);
