@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>SIGLAB · 信号处理实验台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;600&family=Source+Sans+3:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./css/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="hero">
+        <h1 class="brand">SIGLAB</h1>
+        <p class="tagline">
+          选一段输入信号、选一个滤波器，立刻对比时域波形与频域频谱——为 AMR 等语音编解码打基础。
+        </p>
+        <div class="hero-cta">
+          <button type="button" class="btn-primary" id="runBtn">运行滤波</button>
+          <button type="button" class="btn-ghost" id="playIn">试听输入</button>
+          <button type="button" class="btn-ghost" id="playOut">试听输出</button>
+        </div>
+      </header>
+
+      <div class="workbench">
+        <aside class="controls" aria-label="参数面板">
+          <h2>输入 / 算法</h2>
+
+          <div class="field">
+            <label for="signalType">输入信号</label>
+            <select id="signalType"></select>
+          </div>
+
+          <div class="field" id="uploadRow" hidden>
+            <label for="wavFile">WAV 文件（PCM）</label>
+            <input id="wavFile" type="file" accept=".wav,audio/wav" />
+          </div>
+
+          <div class="field">
+            <label for="fs">采样率 fs (Hz)</label>
+            <input id="fs" type="number" min="1000" max="48000" step="1" />
+          </div>
+
+          <div class="field">
+            <label for="duration">时长 (s)</label>
+            <input id="duration" type="number" min="0.01" max="0.5" step="0.01" />
+          </div>
+
+          <div class="field">
+            <label for="freq">主频率 f1 (Hz)</label>
+            <input id="freq" type="number" min="1" max="20000" step="1" />
+          </div>
+
+          <div class="field" id="freq2Row">
+            <label for="freq2">第二频率 / 扫频终点 f2 (Hz)</label>
+            <input id="freq2" type="number" min="1" max="20000" step="1" />
+          </div>
+
+          <div class="field">
+            <label for="algo">处理算法</label>
+            <select id="algo"></select>
+          </div>
+          <p class="hint" id="algoHint"></p>
+
+          <div class="field" id="cutoffRow">
+            <label for="cutoff">截止频率 fc (Hz)</label>
+            <input id="cutoff" type="number" min="1" max="20000" step="1" />
+          </div>
+
+          <div class="field" id="bandRow" hidden>
+            <label for="cutoff2">第二截止频率 fc2 (Hz)</label>
+            <input id="cutoff2" type="number" min="1" max="20000" step="1" />
+          </div>
+
+          <div class="field" id="orderRow">
+            <label for="order">FIR 阶数（奇数）</label>
+            <input id="order" type="number" min="5" max="255" step="2" />
+          </div>
+
+          <div class="field" id="preRow" hidden>
+            <label for="preA">预加重系数 a</label>
+            <input id="preA" type="number" min="0" max="0.99" step="0.01" />
+          </div>
+
+          <div class="field" id="maRow" hidden>
+            <label for="maWin">滑动窗口长度</label>
+            <input id="maWin" type="number" min="1" max="128" step="1" />
+          </div>
+
+          <div class="btn-row">
+            <button type="button" class="btn-primary" onclick="document.getElementById('runBtn').click()">
+              应用
+            </button>
+          </div>
+
+          <div class="legend">
+            <span class="swatch in"><i></i>输入</span>
+            <span class="swatch out"><i></i>输出</span>
+            <span class="swatch resp"><i></i>滤波器响应</span>
+          </div>
+        </aside>
+
+        <section class="plots" aria-label="时域与频域图">
+          <article class="plot-panel">
+            <div class="plot-head">
+              <h3>时域波形</h3>
+              <span>TIME DOMAIN</span>
+            </div>
+            <canvas id="timeCanvas" width="800" height="220"></canvas>
+          </article>
+
+          <article class="plot-panel">
+            <div class="plot-head">
+              <h3>频域幅度谱</h3>
+              <span>FREQUENCY DOMAIN · dB</span>
+            </div>
+            <canvas id="freqCanvas" width="800" height="220"></canvas>
+          </article>
+
+          <article class="plot-panel">
+            <div class="plot-head">
+              <h3>滤波器频率响应</h3>
+              <span>|H(f)|</span>
+            </div>
+            <canvas id="respCanvas" width="800" height="220"></canvas>
+          </article>
+
+          <p class="meta" id="meta">准备就绪</p>
+
+          <div class="note">
+            <strong>和 AMR 的关系：</strong>
+            窄带 AMR 通常按 8&nbsp;kHz 采样；编码器前端常见高通/预加重，把低频能量压下去、抬高高频细节，再进入 LPC / ACELP。这里用「双音 + 高通」或「类语音 + 预加重」就能直观看到频谱怎么被改写。
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <script type="module" src="./js/app.js"></script>
+  </body>
+</html>
