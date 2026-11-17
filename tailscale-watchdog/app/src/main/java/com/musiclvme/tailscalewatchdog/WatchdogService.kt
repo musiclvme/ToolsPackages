@@ -33,6 +33,8 @@ class WatchdogService : Service() {
     private var bootVpnNudgeDone = false
     private var unlockHandled = false
     private var loggedLockedWait = false
+    private var startedLocked = false
+    private var adbdReloadedAfterUnlock = false
 
     override fun onCreate() {
         super.onCreate()
@@ -82,12 +84,12 @@ class WatchdogService : Service() {
     }
 
     private suspend fun monitorLoop() {
-        val lockedAtStart = !DirectBoot.isUnlocked(this)
-        if (!lockedAtStart) {
+        startedLocked = !DirectBoot.isUnlocked(this)
+        if (!startedLocked) {
             unlockHandled = true
         }
         EventLog.add(
-            if (lockedAtStart) {
+            if (startedLocked) {
                 "监控服务已启动（锁屏未解锁，Direct Boot）"
             } else {
                 "监控服务已启动"
@@ -102,8 +104,12 @@ class WatchdogService : Service() {
                 loggedLockedWait = true
                 EventLog.add("锁屏未解锁：已在后台运行，先维持无线调试；解锁后再拉起 Tailscale / 重连 Wi-Fi")
             }
+            if (unlocked && startedLocked && AppPrefs.keepWirelessDebug && !adbdReloadedAfterUnlock) {
+                adbdReloadedAfterUnlock = true
+                wireless.reloadAfterUnlock()
+            }
             val debugSnap = if (AppPrefs.keepWirelessDebug) {
-                wireless.ensureEnabled()
+                wireless.ensureEnabled(unlocked)
                 wireless.snapshot()
             } else {
                 wireless.snapshot()

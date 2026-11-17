@@ -47,11 +47,16 @@ adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECU
 
 5. **打开一次应用**，确认通知、忽略电池优化、无障碍，以及「开机后自动打开无线调试」。
 
-若 `adb devices` 显示 `unauthorized`：
+若 `adb devices` 或 People+ 显示 `unauthorized`（常见原文还会带 `$ADB_VENDOR_KEYS is not set`）：
 
-1. 解锁手机，允许 USB 调试（可勾选始终允许这台计算机）
-2. 若没有弹窗：开发者选项里撤销 USB 调试授权，换线或换口后再插
-3. 再次运行 `adb devices`，应显示 `device`
+这表示 **TCP 5555 已经通了**，但目标机还没授权这台客户端的 RSA 密钥。换一台手机/电脑去连，就是一把新密钥；Windows 上点过允许，不会自动授权 People+。
+
+1. **先解锁目标机**。锁屏上不会弹出「允许 USB 调试」，重启后未解锁时授权文件也还在加密分区里
+2. 在 People+ 里再点一次「连接远程」，目标机应弹出允许对话框，勾选 **始终允许这台计算机**
+3. 弹窗被挡住时：目标机 → 开发者选项 → 撤销 USB 调试授权，再连一次
+4. 客户端上的 `adb kill-server` 只清本地 adb，**不能代替目标机点允许**
+
+锁屏未解锁时可以维持 5555 端口，但远程会一直 `unauthorized`。1.4.1 起看门狗在**第一次解锁后**会重启 adbd，把已经「始终允许」过的密钥重新加载。之后再锁屏，只要这台 People+ 曾经授权过，一般就能继续连。
 
 ## 使用步骤
 
@@ -74,8 +79,8 @@ adb shell pm grant com.musiclvme.tailscalewatchdog android.permission.WRITE_SECU
 
 1.4.0 起看门狗是 Direct Boot 感知的，收到 `LOCKED_BOOT_COMPLETED` 就会在锁屏后面拉起前台服务（锁屏上也能看到常驻通知）：
 
-- **未解锁**：继续维持无线调试 / ADB TCP
-- **解锁后**：再尝试拉起 Tailscale；必要时才重连 Wi-Fi
+- **未解锁**：继续维持无线调试 / ADB TCP（不重启 adbd，避免授权密钥加载失败）
+- **解锁后**：重启一次 adbd 以加载 USB 调试授权，再尝试拉起 Tailscale；必要时才重连 Wi-Fi
 
 无障碍和打开 Tailscale 界面仍然要等解锁。部分国产系统会拦截未解锁启动，需要在系统设置里允许本应用「自启动 / 后台运行」，并关掉电池优化。
 

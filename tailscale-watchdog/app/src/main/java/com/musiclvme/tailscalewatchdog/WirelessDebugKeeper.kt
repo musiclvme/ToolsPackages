@@ -70,7 +70,7 @@ class WirelessDebugKeeper(context: Context) {
         )
     }
 
-    fun ensureEnabled(): WirelessDebugAction {
+    fun ensureEnabled(unlocked: Boolean = DirectBoot.isUnlocked(app)): WirelessDebugAction {
         val port = desiredPort()
         val portText = desiredPortText()
         writeGlobal(KEY_DEVELOPMENT, 1)
@@ -82,7 +82,7 @@ class WirelessDebugKeeper(context: Context) {
             return WirelessDebugAction.ALREADY_ON
         }
 
-        if (enableTcpPort()) {
+        if (enableTcpPort(restartAdbd = AdbAuthPolicy.shouldRestartAdbd(unlocked))) {
             remember(WirelessDebugAction.TURNED_ON, "已把 ADB TCP 端口固定为 $port")
             return WirelessDebugAction.TURNED_ON
         }
@@ -94,12 +94,25 @@ class WirelessDebugKeeper(context: Context) {
             else -> WirelessDebugAction.NEED_PERMISSION
         }
         val message = if (persist == portText) {
-            "persist.adb.tcp.port 已是 $port，但当前进程还没听这个端口，等 adbd 重启或再开一次无线调试"
+            "persist.adb.tcp.port 已是 $port，但当前进程还没听这个端口，等解锁后重启 adbd"
         } else {
             "重启后 $port 会丢。请用 USB 执行一次：${persistCommand(port)}"
         }
         remember(action, message)
         return action
+    }
+
+    /**
+     * After the first unlock, restart adbd so it can read previously allowed RSA keys.
+     * Doing this while the lock screen is still up leaves clients as `unauthorized`.
+     */
+    fun reloadAfterUnlock() {
+        writeGlobal(KEY_DEVELOPMENT, 1)
+        writeGlobal(Settings.Global.ADB_ENABLED, 1)
+        writeGlobal(KEY_ADB_WIFI, 1)
+        enableTcpPort(restartAdbd = true)
+        lastLoggedKey = null
+        EventLog.add("设备已解锁，已重启 adbd 以加载 USB 调试授权。远程若仍是 unauthorized，请在本机点允许并勾选始终允许")
     }
 
     fun isTcpReady(): Boolean {
@@ -123,7 +136,7 @@ class WirelessDebugKeeper(context: Context) {
         return app.checkSelfPermission(WRITE_SECURE) == PackageManager.PERMISSION_GRANTED
     }
 
-    private fun enableTcpPort(): Boolean {
+    private fun enableTcpPort(restartAdbd: Boolean): Boolean {
         val portText = desiredPortText()
         if (canSu()) {
             runSu("settings put global $KEY_DEVELOPMENT 1")
@@ -134,17 +147,31 @@ class WirelessDebugKeeper(context: Context) {
                 runSu("resetprop $key $portText")
             }
             runSu("setprop service.adb.tcp.port $portText")
-            runSu("setprop ctl.restart adbd")
-            runSu("stop adbd; start adbd")
-            Thread.sleep(1_500)
+            if (restartAdbd) {
+                runSu("setprop ctl.restart adbd")
+                runSu("stop adbd; start adbd")
+                Thread.sleep(1_500)
+            }
             if (isTcpReady() || persistPort() == portText) return persistPort() == portText
         }
         for (key in PERSIST_KEYS) {
             runPlain(listOf("setprop", key, portText))
         }
         runPlain(listOf("setprop", "service.adb.tcp.port", portText))
-        Thread.sleep(400)
+        if (restartAdbd) {
+            bounceAdbdWithoutRoot()
+        } else {
+            Thread.sleep(400)
+        }
         return isTcpReady() || persistPort() == portText
+    }
+
+    private fun bounceAdbdWithoutRoot() {
+        writeGlobal(KEY_ADB_WIFI, 0)
+        writeGlobal(Settings.Global.ADB_ENABLED, 1)
+        writeGlobal(KEY_ADB_WIFI, 1)
+        runPlain(listOf("setprop", "ctl.restart", "adbd"))
+        Thread.sleep(800)
     }
 
     private fun persistPort(): String {
